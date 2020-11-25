@@ -1,3 +1,4 @@
 #!/bin/bash
 
-./.batch_devices.sh --stat device push $*
+shell_dir=$(dirname "$0")
+"$shell_dir"/.batch_devices.sh --stat device push "$*"
