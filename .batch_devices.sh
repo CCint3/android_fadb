@@ -9,7 +9,7 @@ function Usage() {
 }
 
 args=''
-is_fastboot='false'
+is_fastboot=0
 dev_stat='device'
 until [ $# -eq 0 ]; do
   case $1 in
@@ -18,7 +18,7 @@ until [ $# -eq 0 ]; do
     shift 2
     ;;
   --fastboot)
-    is_fastboot='true'
+    is_fastboot=1
     shift 1
     ;;
   --help)
@@ -32,21 +32,24 @@ until [ $# -eq 0 ]; do
   esac
 done
 
-if [ "$is_fastboot" == "true" ]; then
+if [ "$is_fastboot" -eq 1 ]; then
   base_cmd="fastboot"
 else
   base_cmd="adb"
 fi
 echo "applying \"$base_cmd\" command to devices in the \"$dev_stat\" state:"
 
+# save IFS
 OLD_IFS=$IFS
+
+# split with '\n'
 IFS=$'\x0a'
 devices_cmd="$base_cmd devices"
 for i in $(eval "$devices_cmd" | awk 'NR>1 {print $0}'); do
   IFS=$OLD_IFS
   dev=$(echo "$i" | awk -F " " '{print $1}')
   stat=$(echo "$i" | awk -F " " '{print $2}')
-  if [ "$stat" == "$dev_stat" ]; then
+  if [ "$stat" = "$dev_stat" ]; then
     echo "  applying: $i"
     command="$base_cmd -s $dev $args"
     eval "$command"
