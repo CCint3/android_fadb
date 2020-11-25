@@ -2,14 +2,38 @@
 
 function Usage() {
   printf '%s Usage:\n' "$0"
-  printf '  --fastboot: use fastboot command, default: adb\n'
+  printf '%s [--cmd [adb | fastboot]] [--stat stat] args*\n' "$0"
+  printf '  --cmd: used command, default: adb\n'
+  printf '    option: [adb | fastboot]'
   printf '  --stat: devices state, default: device\n'
   printf '    option: [device | offline | recovery | fastboot] etc.\n'
   printf '\n'
 }
 
+function get_target_stat_serial() {
+  cmd=$1
+  target_stat=$2
+  ret=''
+  if [ "$cmd" = "adb" ]; then
+    awk_param=("NR>1 {print \$1}")
+  elif [ "$cmd" = "fastboot" ]; then
+    awk_param=("{print \$1}")
+  else
+    return 1
+  fi
+  for dev in $(eval "$cmd devices" | awk "${awk_param[@]}"); do
+    current_stat=$(eval "$cmd devices" | grep "$dev" | awk '{print $2}')
+
+    if [ "$current_stat" = "$target_stat" ]; then
+      ret=$ret"$dev "
+    fi
+  done
+  echo "$ret"
+  return 0
+}
+
 args=''
-is_fastboot=0
+cmd="adb"
 dev_stat='device'
 until [ $# -eq 0 ]; do
   case $1 in
@@ -17,45 +41,27 @@ until [ $# -eq 0 ]; do
     dev_stat=$2
     shift 2
     ;;
-  --fastboot)
-    is_fastboot=1
-    shift 1
+  --cmd)
+    cmd=$2
+    shift 2
     ;;
   --help)
     Usage
     exit 0
     ;;
   *)
-    args="$args $1"
+    args=("${args[@]}" "$1")
     shift
     ;;
   esac
 done
 
-if [ "$is_fastboot" -eq 1 ]; then
-  base_cmd="fastboot"
-else
-  base_cmd="adb"
-fi
-echo "applying \"$base_cmd\" command to devices in the \"$dev_stat\" state:"
+echo "applying \"$cmd\" command to devices in the \"$dev_stat\" state:"
 
-# save IFS
-OLD_IFS=$IFS
-
-# split with '\n'
-IFS=$'\x0a'
-devices_cmd="$base_cmd devices"
-for i in $(eval "$devices_cmd" | awk 'NR>1 {print $0}'); do
-  IFS=$OLD_IFS
-  dev=$(echo "$i" | awk -F " " '{print $1}')
-  stat=$(echo "$i" | awk -F " " '{print $2}')
-  if [ "$stat" = "$dev_stat" ]; then
-    echo "  applying: $i"
-    command="$base_cmd -s $dev $args"
-    eval "$command"
-  else
-    echo "  skipping: $i"
-  fi
-  IFS=$'\x0a'
+for dev in $(get_target_stat_serial "$cmd" "$dev_stat"); do
+  echo "  applying on: $dev"
+  command="$cmd -s $dev ${args[*]}"
+  /bin/bash -c "$command" &
 done
-IFS=$OLD_IFS
+
+sleep 1
